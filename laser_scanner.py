@@ -9,24 +9,28 @@ import math
 class LaserScanner:
 
     def __init__(self, camId, camFoV, distCamera2Laser, alphaLaser):
-        """ please enter angles in radians """
+        """ angles in radians """
         
         self.cam_id = camId
         self.cam_fov = camFoV
         self.d_cl = distCamera2Laser
         self.alpha_l = alphaLaser
 
-        self.horizontal_resolution = 640
+        self.resolution = 640
 
         self.tan_0_5fov = math.tan(self.cam_fov / 2.0)
-        self.np_0_5 = self.horizontal_resolution / 2.0
+        self.np_0_5 = self.resolution / 2.0
         self.cos_alpha_l = math.cos(self.alpha_l)
     
 
     def get_gamma1(self, pixels_from_center):
         return math.atan(self.tan_0_5fov * (pixels_from_center / self.np_0_5))
     
-    def get_distance(self, pixels_from_center):
+    def get_distance(self, pixel_coord):
+        if pixel_coord < 0:
+            return -1
+
+        pixels_from_center = pixel_coord - (self.resolution / 2.0)
 
         gamma1 = self.get_gamma1(pixels_from_center)
 
@@ -35,6 +39,9 @@ class LaserScanner:
     def get_laser_line(self, img, threshold_min, threshold_max):
 
         green = img[:,:,1]
+        grayscale = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        print(green.shape)
+        #ret, frame_thresholded = cv2.threshold(grayscale, threshold_min, threshold_max, cv2.THRESH_BINARY)
         ret, frame_thresholded = cv2.threshold(green, threshold_min, threshold_max, cv2.THRESH_BINARY)
         #np.set_printoptions(threshold=sys.maxsize)
         #print(frame_thresholded)
@@ -73,4 +80,4 @@ class LaserScanner:
             #else:
             #    frame_lline[round(y), lline_data[i][0]] = 0
 
-        return frame_lline
+        return frame_lline, lline_data

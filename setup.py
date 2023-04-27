@@ -5,5 +5,6 @@ setup(name="laser-scanner",
       py_modules=[],
       install_requires=[
         'opencv-python',
+        'matplotlib',
         ]
       )
