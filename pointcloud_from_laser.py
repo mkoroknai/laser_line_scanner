@@ -1,5 +1,3 @@
-from math import dist
-from turtle import pos
 import cv2
 import numpy as np
 import sys
