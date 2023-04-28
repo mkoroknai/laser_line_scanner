@@ -3,14 +3,16 @@ import numpy as np
 import sys
 import math
 import matplotlib.pyplot as plt
+import open3d as o3d
 
 from laser_scanner import LaserScanner
+
 
 
 CAM_ID = 0
 CAM_WIDTH = 640
 CAM_HEIGHT = 480
-THRESHOLD_MIN = 250
+THRESHOLD_MIN = 245
 THRESHOLD_MAX = 255
 
 CAM_FOV = 40 # deg
@@ -21,7 +23,7 @@ ALPHA_LASER = 15 # laser tilted by this much, degrees
 #cap = cv2.VideoCapture(CAM_ID)
 
 
-frame = cv2.imread("test_depth03.jpg")
+frame = cv2.imread("test_depth00.png")
 
 laser_scanner = LaserScanner(math.radians(CAM_FOV), D_CL, math.radians(ALPHA_LASER))
 
@@ -31,22 +33,41 @@ coords = []
 
 for i in range(len(lline_data)):
     
-    x, y = laser_scanner.get_xy(lline_data[i])
+    x, y, z = laser_scanner.get_xyz(lline_data[i])
 
     if y > 0:
-        coords += [[x, y]]
+        coords += [[x, y, z]]
     #else:
     #    distances += [None]
     #print(str(lline_data[i]) + " : " + str(distance))
 
+coords = np.array(coords)
+surf = coords.copy()
+for i in range(20):
+    shifted = coords.copy()
+    #print(shifted)
+    shifted[:, 2] += i / 800.0
+    surf = np.append(surf, shifted, axis=0)
+
+
+#np.set_printoptions(threshold=sys.maxsize)
+#print(surf.shape)
+#fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+#ax.scatter(surf[:, 0], surf[:, 1], surf[:, 2])
+#plt.show()
+
+pc = o3d.geometry.PointCloud()
+pc.points = o3d.utility.Vector3dVector(surf)
+pc.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+print(np.asarray(pc.normals))
+
+radii = [0.005, 0.01]
+rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(pc, o3d.utility.DoubleVector(radii))
+o3d.visualization.draw_geometries([rec_mesh])
+
 
 window_name = "Scan"
 window = cv2.namedWindow(window_name, cv2.WINDOW_AUTOSIZE)
-
-coords = np.array(coords)
-print(coords)
-plt.plot(coords[:, 0], coords[:, 1])
-plt.show()
 
 while True:
 

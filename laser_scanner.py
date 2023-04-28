@@ -43,10 +43,10 @@ class LaserScanner:
 
         return self.cos_alpha_l * self.d_cl * (math.sin((math.pi / 2.0) - gamma1) / math.sin(gamma1 + self.alpha_l))
     
-    def get_xy(self, pixel_coord):
+    def get_xyz(self, pixel_coord):
 
         if pixel_coord[1] < 0:
-            return -1
+            return -1.0, -1.0, -1.0
         
         pixels_from_center_y = pixel_coord[1] - self.np_0_5
         gamma1 = self.get_gamma1(pixels_from_center_y)
@@ -56,8 +56,9 @@ class LaserScanner:
 
         y = self.get_distance(gamma1)
         x = y * math.tan(phi1)
-        
-        return x, y
+        z = y * math.tan(gamma1)
+
+        return x, y, z
     
     def get_laser_line(self, img, threshold_min, threshold_max):
 
@@ -107,5 +108,5 @@ class LaserScanner:
         return frame_lline, lline_data
     
     def get_camera_frame(self):
-        if self.cam_id:
+        if self.cap.isOpened():
             return self.cap.read()
