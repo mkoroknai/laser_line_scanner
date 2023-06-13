@@ -15,15 +15,15 @@ CAM_HEIGHT = 480
 THRESHOLD_MIN = 245
 THRESHOLD_MAX = 255
 
-CAM_FOV = 40 # deg
-D_CL = 0.15 # distance between camera and laser position, in m
-ALPHA_LASER = 15 # laser tilted by this much, degrees
+CAM_FOV = 64.8 # deg
+D_CL = 0.31 # distance between camera and laser position, in m
+ALPHA_LASER = 28.67 # laser tilted by this much, degrees
 
 
 #cap = cv2.VideoCapture(CAM_ID)
 
 
-frame = cv2.imread("test_depth00.png")
+frame = cv2.imread("test_depth05.jpg")
 
 laser_scanner = LaserScanner(math.radians(CAM_FOV), D_CL, math.radians(ALPHA_LASER))
 
@@ -35,11 +35,11 @@ for i in range(len(lline_data)):
     
     x, y, z = laser_scanner.get_xyz(lline_data[i])
 
+    #print(lline_data[i])
+    print(y)
+
     if y > 0:
-        coords += [[x, y, z]]
-    #else:
-    #    distances += [None]
-    #print(str(lline_data[i]) + " : " + str(distance))
+        coords += [[x, y, -z]]
 
 coords = np.array(coords)
 surf = coords.copy()
@@ -59,11 +59,11 @@ for i in range(20):
 pc = o3d.geometry.PointCloud()
 pc.points = o3d.utility.Vector3dVector(surf)
 pc.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
-print(np.asarray(pc.normals))
+#print(np.asarray(pc.normals))
 
-radii = [0.005, 0.01]
-rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(pc, o3d.utility.DoubleVector(radii))
-o3d.visualization.draw_geometries([rec_mesh])
+#radii = [0.005, 0.01]
+#rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(pc, o3d.utility.DoubleVector(radii))
+o3d.visualization.draw_geometries([pc], point_show_normal=True)
 
 
 window_name = "Scan"

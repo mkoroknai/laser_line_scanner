@@ -1,8 +1,9 @@
-from calendar import c
 import cv2
 import numpy as np
 import sys
 import math
+import open3d as o3d
+import time
 
 
 class LaserScanner:
@@ -30,6 +31,8 @@ class LaserScanner:
             self.resolution_h = self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
             self.frame = None
             
+            cv2.setMouseCallback(self.window_name, self.mouse_callback)
+            
         else:
             self.cap = None
             self.window = None
@@ -51,6 +54,8 @@ class LaserScanner:
         self.np_0_5_x = (self.resolution_w / self.aspect_ratio) / 2.0
 
         self.is_processing = False
+
+        self.rot_axis_offset = np.array([0, 0, 0])
 
     
 
@@ -178,9 +183,88 @@ class LaserScanner:
                     self.is_processing = True
             if cv2.getWindowProperty(self.window_name, cv2.WND_PROP_VISIBLE) < 1:
                 break
+        
+        points = self.proc_points()
+        
+        pc = o3d.geometry.PointCloud()
+        pc.points = o3d.utility.Vector3dVector(points)
+
+        
+        distances = pc.compute_nearest_neighbor_distance()
+        avg_dist = np.mean(distances)
+        radius = 3 * avg_dist 
+        pc, ind = pc.remove_radius_outlier(nb_points=4, radius=radius)
+        
+        cf = o3d.geometry.TriangleMesh.create_coordinate_frame(.2)
+        pc.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.01, max_nn=30))
+
+        radius = 1.5 * avg_dist
+
+        radii = [radius, 2.0 * radius]
+        rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(pc, o3d.utility.DoubleVector(radii))
+
+        o3d.visualization.draw_geometries([pc, rec_mesh], mesh_show_back_face=True)
+
+        timestamp = time.time()
+        o3d.io.write_point_cloud("pc_" + str(timestamp) + ".pcd", pc)
+        o3d.io.write_triangle_mesh("pc_" + str(timestamp) + ".stl", rec_mesh)
+
+        self.close()
+
+    def mouse_callback(self, event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDBLCLK:
+            self.rot_axis_offset = self.get_xyz(np.array([[y, x]]))[0]
+            print(self.rot_axis_offset)
+
     
+    def proc_points(self):
+        num_frames = len(self.coords3d)
+
+        for i in range(num_frames):
+            self.coords3d[i] = self.coords3d[i][self.coords3d[i][:, 1] < (self.rot_axis_offset[1] + 0.2)]
+            self.coords3d[i] = self.coords3d[i][self.coords3d[i][:, 1] > (self.rot_axis_offset[1] - 0.2)]
+            self.coords3d[i] = self.coords3d[i][self.coords3d[i][:, 0] < (self.rot_axis_offset[0] + 0.0001)]
+
+        # translate points to center? of coordinate system
+        print("offset: " + str(self.rot_axis_offset))
+        print(self.coords3d[0][0])
+        for i in range(num_frames):
+            self.coords3d[i] -= self.rot_axis_offset
+
+        delta_angle = 360.0 / num_frames
+
+        points = self.coords3d[num_frames - 1]
+        print("num_frames: " + str(num_frames))
+        i = num_frames
+        while i > 0:
+            rot_mat = rotation_matrix([1, 0, 0], math.radians(i * delta_angle))
+            if len(self.coords3d[num_frames - i]) > 0:
+                points = np.append(points, np.dot(self.coords3d[num_frames - i], rot_mat.T), axis=0)
+                #points = np.append(points, self.coords3d[num_frames - i], axis=0)
+            #print( i * delta_angle)
+            i -= 1
+        
+        return points
+
 
     def close(self):
         if self.cap.isOpened():
             self.cap.release()
         cv2.destroyAllWindows()
+
+
+
+def rotation_matrix(axis, theta):
+    """
+    Return the rotation matrix associated with counterclockwise rotation about
+    the given axis by theta radians.
+    """
+    axis = np.asarray(axis)
+    axis = axis / math.sqrt(np.dot(axis, axis))
+    a = math.cos(theta / 2.0)
+    b, c, d = -axis * math.sin(theta / 2.0)
+    aa, bb, cc, dd = a * a, b * b, c * c, d * d
+    bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
+    return np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
+                     [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
+                     [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])

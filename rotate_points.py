@@ -2,23 +2,9 @@ import cv2
 import math
 import numpy as np
 import open3d as o3d
-from laser_scanner import LaserScanner
+from laser_scanner import LaserScanner, rotation_matrix
 
 
-def rotation_matrix(axis, theta):
-    """
-    Return the rotation matrix associated with counterclockwise rotation about
-    the given axis by theta radians.
-    """
-    axis = np.asarray(axis)
-    axis = axis / math.sqrt(np.dot(axis, axis))
-    a = math.cos(theta / 2.0)
-    b, c, d = -axis * math.sin(theta / 2.0)
-    aa, bb, cc, dd = a * a, b * b, c * c, d * d
-    bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
-    return np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
-                     [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
-                     [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
 
 
 img = cv2.imread("test_rotation_frame.jpg")
@@ -87,12 +73,16 @@ pc.points = o3d.utility.Vector3dVector(coords)
 #pc, ind = pc.remove_radius_outlier(nb_points=2, radius=0.004)
 pc.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
 
-radii = [0.001, 0.002, 0.004]
-#rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(pc, o3d.utility.DoubleVector(radii))
+distances = pc.compute_nearest_neighbor_distance()
+avg_dist = np.mean(distances)
+radius = 1.5 * avg_dist
+
+radii = [radius, 2.0 * radius]
+rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(pc, o3d.utility.DoubleVector(radii))
 #cf = o3d.geometry.TriangleMesh.create_coordinate_frame(.2)
 #o3d.visualization.draw_geometries([pc],
 #                                  zoom=.72,
 #                                  front=[0.1, -0.5, 0.0],
 #                                  lookat=[0.0, 0.05, -0.2],
 #                                  up=[0, 1, 0])
-o3d.visualization.draw_geometries([pc])
+o3d.visualization.draw_geometries([rec_mesh])
