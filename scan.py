@@ -14,4 +14,3 @@ laser_scanner = LaserScanner(camFoV=math.radians(CAM_FOV), distCamera2Laser=D_CL
 
 
 laser_scanner.run()
-#laser_scanner.close()

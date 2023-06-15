@@ -9,13 +9,14 @@ import time
 class LaserScanner:
 
     def __init__(self, camFoV, distCamera2Laser, alphaLaser, camId = None):
-        """ angles in radians 
+        """ angles in radians
+            camFoV is the horizontal field of view
             the scanner assumes a horizontal layout video
             and a vertical laser line
         """
 
-        self.resolution_w = 640.0
-        self.resolution_h = 480.0
+        self.resolution_h = 640.0 # horizontal resolution
+        self.resolution_v = 480.0 # vertical resolution
 
         self.threshold_min = 250
         self.threshold_max = 255
@@ -27,8 +28,8 @@ class LaserScanner:
             self.cap = cv2.VideoCapture(camId)
             self.window = cv2.namedWindow(self.window_name, cv2.WINDOW_AUTOSIZE)
             self.window = cv2.namedWindow(self.window_proc_name, cv2.WINDOW_AUTOSIZE)
-            self.resolution_w = self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-            self.resolution_h = self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+            self.resolution_h = self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+            self.resolution_v = self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
             self.frame = None
             
             cv2.setMouseCallback(self.window_name, self.mouse_callback)
@@ -37,21 +38,21 @@ class LaserScanner:
             self.cap = None
             self.window = None
         
-        self.aspect_ratio = float(self.resolution_w) / float(self.resolution_h)
+        self.aspect_ratio = float(self.resolution_h) / float(self.resolution_v)
 
-        self.cam_fov = camFoV
-        self.cam_fov_x = 2 * math.atan((math.tan(self.cam_fov / 2.0) * self.resolution_h) / self.resolution_w)
+        self.cam_fov_h = camFoV # horizontal field of view
+        self.cam_fov_v = 2 * math.atan((math.tan(self.cam_fov_h / 2.0) * self.resolution_v) / self.resolution_h)
         self.d_cl = distCamera2Laser
         self.alpha_l = alphaLaser
 
 
-        self.tan_0_5fov = math.tan(self.cam_fov / 2.0)
-        self.np_0_5 = self.resolution_w / 2.0
+        self.tan_0_5fov_h = math.tan(self.cam_fov_h / 2.0)
+        self.res_0_5_h = self.resolution_h / 2.0
         self.cos_alpha_l = math.cos(self.alpha_l)
         #print(self.cos_alpha_l)
 
-        self.tan_0_5fov_x = math.tan(self.cam_fov_x / 2.0)
-        self.np_0_5_x = (self.resolution_w / self.aspect_ratio) / 2.0
+        self.tan_0_5fov_v = math.tan(self.cam_fov_v / 2.0)
+        self.res_0_5_v = (self.resolution_h / self.aspect_ratio) / 2.0
 
         self.is_processing = False
 
@@ -59,17 +60,17 @@ class LaserScanner:
 
     
 
-    def get_gamma1(self, pixels_from_center):
-        #print(pixels_from_center/self.np_0_5)
-        return np.arctan(self.tan_0_5fov * (pixels_from_center / self.np_0_5))
+    def get_gamma(self, pixels_from_center):
+        #print(pixels_from_center/self.res_0_5)
+        return np.arctan(self.tan_0_5fov_h * (pixels_from_center / self.res_0_5_h))
     
-    def get_phi1(self, pixels_from_center):
-        return np.arctan(self.tan_0_5fov_x * (pixels_from_center / self.np_0_5_x))
+    def get_omega(self, pixels_from_center):
+        return np.arctan(self.tan_0_5fov_v * (pixels_from_center / self.res_0_5_v))
 
     
-    def get_distance(self, gamma1):
+    def get_distance(self, gamma):
 
-        return self.cos_alpha_l * self.d_cl * (np.sin((np.pi / 2.0) - gamma1) / np.sin(gamma1 + self.alpha_l))
+        return self.cos_alpha_l * self.d_cl * (np.sin((np.pi / 2.0) - gamma) / np.sin(gamma + self.alpha_l))
     
     def get_xyz(self, pixel_coord):
 
@@ -78,23 +79,24 @@ class LaserScanner:
 
         coords3D = np.empty((len(pixel_coord), 3))
 
-        pixels_from_center_y = pixel_coord[:, 1] - self.np_0_5
-        gamma1 = self.get_gamma1(pixels_from_center_y)
+        pixels_from_center_h = pixel_coord[:, 1] - self.res_0_5_h
+        gamma = self.get_gamma(pixels_from_center_h)
         #print(math.degrees(gamma1))
 
-        pixels_from_center_x = pixel_coord[:, 0] - self.np_0_5_x
-        phi1 = self.get_phi1(pixels_from_center_x)
+        pixels_from_center_v = pixel_coord[:, 0] - self.res_0_5_v
+        omega = self.get_omega(pixels_from_center_v)
 
-        coords3D[:, 1] = self.get_distance(gamma1)
-        coords3D[:, 0] = coords3D[:, 1] * np.tan(phi1)
-        coords3D[:, 2] = coords3D[:, 1] * np.tan(gamma1)
+        rz = self.get_distance(gamma)
+        coords3D[:, 2] = rz # z coordinate
+        coords3D[:, 1] = -rz * np.tan(omega) # y coordinate
+        coords3D[:, 0] = -rz * np.tan(gamma) # x coordinate
 
         return coords3D
     
     def get_laser_line(self, img, threshold_min, threshold_max):
 
         green = img[:,:,1]
-        grayscale = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        #grayscale = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         #ret, frame_thresholded = cv2.threshold(grayscale, threshold_min, threshold_max, cv2.THRESH_BINARY)
         ret, frame_thresholded = cv2.threshold(green, threshold_min, threshold_max, cv2.THRESH_BINARY)
         #np.set_printoptions(threshold=sys.maxsize)
@@ -221,9 +223,10 @@ class LaserScanner:
         num_frames = len(self.coords3d)
 
         for i in range(num_frames):
-            self.coords3d[i] = self.coords3d[i][self.coords3d[i][:, 1] < (self.rot_axis_offset[1] + 0.2)]
-            self.coords3d[i] = self.coords3d[i][self.coords3d[i][:, 1] > (self.rot_axis_offset[1] - 0.2)]
-            self.coords3d[i] = self.coords3d[i][self.coords3d[i][:, 0] < (self.rot_axis_offset[0] + 0.0001)]
+            # throw away points too far and too close
+            self.coords3d[i] = self.coords3d[i][self.coords3d[i][:, 2] < (self.rot_axis_offset[2] + 0.2)]
+            self.coords3d[i] = self.coords3d[i][self.coords3d[i][:, 2] > (self.rot_axis_offset[2] - 0.2)]
+            self.coords3d[i] = self.coords3d[i][self.coords3d[i][:, 1] > (self.rot_axis_offset[1] + 0.005)]
 
         # translate points to center? of coordinate system
         print("offset: " + str(self.rot_axis_offset))
@@ -237,11 +240,10 @@ class LaserScanner:
         print("num_frames: " + str(num_frames))
         i = num_frames
         while i > 0:
-            rot_mat = rotation_matrix([1, 0, 0], math.radians(i * delta_angle))
+            rot_mat = rotation_matrix([0, 1, 0], math.radians(i * delta_angle))
             if len(self.coords3d[num_frames - i]) > 0:
                 points = np.append(points, np.dot(self.coords3d[num_frames - i], rot_mat.T), axis=0)
-                #points = np.append(points, self.coords3d[num_frames - i], axis=0)
-            #print( i * delta_angle)
+
             i -= 1
         
         return points
