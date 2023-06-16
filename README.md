@@ -3,14 +3,14 @@
 
 ## Setup
 
-1. Create a virtual environment
+1. Create a virtual environment:
 ```
 $ python -m venv venv
 ```
-2. Activate venv
-3. Install libraries using pip
+2. Activate venv.
+3. Install libraries in setup.py using pip:
 ```
-pip install -e .
+$ pip install -e .
 ```
 
 ## Run
