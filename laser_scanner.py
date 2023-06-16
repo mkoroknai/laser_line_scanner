@@ -8,7 +8,7 @@ import time
 
 class LaserScanner:
 
-    def __init__(self, camFoV, distCamera2Laser, alphaLaser, camId = None):
+    def __init__(self, camFoV, distCamera2Laser, alphaLaser, th_min, th_max, camId = None):
         """ angles in radians
             camFoV is the horizontal field of view
             the scanner assumes a horizontal layout video
@@ -18,8 +18,8 @@ class LaserScanner:
         self.resolution_h = 640.0 # horizontal resolution
         self.resolution_v = 480.0 # vertical resolution
 
-        self.threshold_min = 250
-        self.threshold_max = 255
+        self.threshold_min = th_min
+        self.threshold_max = th_max
         
         self.cam_id = camId
         self.window_name = "Laser Scanner"
@@ -205,11 +205,11 @@ class LaserScanner:
         radii = [radius, 2.0 * radius]
         rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(pc, o3d.utility.DoubleVector(radii))
 
-        o3d.visualization.draw_geometries([pc, rec_mesh], mesh_show_back_face=True)
+        o3d.visualization.draw_geometries([pc, rec_mesh, cf], mesh_show_back_face=True)
 
         timestamp = time.time()
         o3d.io.write_point_cloud("pc_" + str(timestamp) + ".pcd", pc)
-        o3d.io.write_triangle_mesh("pc_" + str(timestamp) + ".stl", rec_mesh)
+        o3d.io.write_triangle_mesh("tm_" + str(timestamp) + ".stl", rec_mesh)
 
         self.close()
 
